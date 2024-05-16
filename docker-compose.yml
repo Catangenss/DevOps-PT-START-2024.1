@@ -1,0 +1,56 @@
+version: '3.8'
+services:
+  bot:
+    image: bot_image
+    build:
+        context: ./bot
+    environment:
+      - TOKEN=${TOKEN}
+      - RM_HOST=${RM_HOST}
+      - RM_PORT=${RM_PORT}
+      - RM_USER=${RM_USER}
+      - RM_PASSWORD=${RM_PASSWORD}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+    volumes:
+      - pg_logs:/var/log/
+    container_name: bot
+
+  db:
+    image: db_image
+    build: 
+      context: ./db
+      args:
+        DB_PORT: ${DB_PORT}
+        POSTGRES_USER: ${DB_USER}
+        DB_REPL_HOST: ${DB_REPL_HOST}
+        DB_REPL_USER: ${DB_REPL_USER}
+        DB_REPL_PASSWORD: ${DB_REPL_PASSWORD}
+        DB_DATABASE: ${DB_DATABASE}
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - pg_logs:/var/log/
+    container_name: db
+
+  db_repl:
+    image: db_repl_image
+    depends_on:
+      - db
+    build:
+      context: ./db_repl
+      args:
+        DB_REPL_PORT: ${DB_REPL_PORT}
+    container_name: db_repl
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_REPL_USER=${DB_REPL_USER}
+      - DB_REPL_PASSWORD=${DB_REPL_PASSWORD}
+volumes:
+  pg_logs:
