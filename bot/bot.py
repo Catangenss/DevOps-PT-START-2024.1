@@ -251,7 +251,7 @@ def command_replica(update: Update, context):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, error = process.communicate()
     if error:
-        update.message.reply_text("Ошибка при выполнении команды:", error.decode())
+        update.message.reply_text("Ошибка при выполнении команды: " + error.decode())
     else:
         update.message.reply_text(output.decode())
 
