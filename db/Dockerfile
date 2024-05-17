@@ -30,7 +30,7 @@ log_replication_commands = on
 log_destination = 'stderr'
 logging_collector = on
 log_directory = '/var/log/postgresql/'
-log_filename = 'postgresql.log'
+log_filename = 'postgresql-16-main.log'
 log_timezone = 'Europe/Moscow'
 EOF
 

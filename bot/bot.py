@@ -247,7 +247,7 @@ def command(update: Update, context, command):
         update.message.reply_text(current_chunk)
 
 def command_replica(update: Update, context):
-    command = "grep -E -i 'replica|checkpoint' /var/log/postgresql/postgresql.log | tail -n 20"
+    command = "grep -E -i 'replica|checkpoint' /var/log/postgresql/postgresql-16-main.log | tail -n 20"
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, error = process.communicate()
     if error:
