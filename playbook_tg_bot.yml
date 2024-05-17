@@ -1,0 +1,211 @@
+- name: db_install
+  hosts: db_bot
+  become: true   # команда позволяет ansible использовать права root.
+  tasks:
+    - name: Add PostgreSQL apt repository key
+      apt_key:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+    - name: Add PostgreSQL apt repository
+      apt_repository:
+        repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+
+    - name: Add deadsnakes PPA repository
+      apt_repository:
+        repo: ppa:deadsnakes/ppa
+
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+
+    - name: Install PostgreSQL 16 and Python 3.9
+      apt:                   
+        name: 
+          - postgresql-16
+          - python3.9
+        state: present        # Устанавливаем состояние пакетов как present
+
+    - name: Install other packages in the latest version
+      apt:
+        name: 
+          - python3-pip
+          - libpq-dev
+          - postgresql-contrib
+        state: latest         # Устанавливаем последние версии пакетов
+    
+    - name: Install Python packages
+      pip:
+        name:
+          - paramiko
+          - psycopg2-binary
+          - python-dotenv
+          - python-telegram-bot==13.7
+
+
+- name: db_configurate
+  hosts: db_bot
+  become: true
+  tasks:
+    - name: config postgresql.conf
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf  # Путь к конфигурационному файлу PostgreSQL
+        regexp: '^#?{{ item.regexp }}'               # Регулярное выражение для поиска строки (с учетом возможного наличия комментария перед настройкой)
+        line: '{{ item.line }}'                      # Новая строка для замены
+      loop:
+        - { regexp: "listen_addresses =", line: "listen_addresses = '*'" }
+        - { regexp: "port =", line: "port = {{ hostvars[inventory_hostname]['DB_PORT'] }}" }
+        - { regexp: "archive_mode =", line: "archive_mode = on" }
+        - { regexp: "archive_command =", line: "archive_command = 'cp %p /oracle/pg_data/archive/%f'" }
+        - { regexp: "max_wal_senders =", line: "max_wal_senders = 10" }
+        - { regexp: "wal_level =", line: "wal_level = replica" }
+        - { regexp: "wal_log_hints =", line: "wal_log_hints = on" }
+    
+    - name: config pg_hba.conf
+      lineinfile:
+        path: /etc/postgresql/16/main/pg_hba.conf
+        line: "host replication {{ hostvars[inventory_hostname]['DB_REPL_USER'] }} {{ hostvars[inventory_hostname]['DB_REPL_HOST'] }}/32 scram-sha-256"
+
+    - name: Create archive directory
+      file:
+        path: /oracle/pg_data/archive
+        state: directory
+
+    - name: Chown archive directory
+      shell: chown -R postgres:postgres /oracle/pg_data/archive/
+
+    - name: Restart PostgreSQL
+      systemd:
+        state: restarted
+        daemon_reload: yes
+        name: postgresql
+
+
+- name: creating_database_tables
+  hosts: db_bot
+  become: true
+  become_user: postgres
+  tasks:
+    - name: Set new password for PostgreSQL user
+      postgresql_user:
+        name: postgres
+        password: "{{ hostvars[inventory_hostname]['DB_PASSWORD'] }}"
+        encrypted: yes
+
+    - name: Create user for replication
+      postgresql_user:
+        name: "{{ hostvars[inventory_hostname]['DB_REPL_USER'] }}"
+        password: "{{ hostvars[inventory_hostname]['DB_REPL_PASSWORD'] }}"
+        role_attr_flags: REPLICATION,LOGIN
+        state: present
+
+    - name: Create database
+      postgresql_db:
+        name: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        state: present
+
+    - name: Create table tel_number
+      postgresql_query:
+        db: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        query: "CREATE TABLE tel_numbers (id SERIAL PRIMARY KEY, username VARCHAR(50) NOT NULL, tel_number VARCHAR(20) NOT NULL)" 
+
+    - name: Create table emails
+      postgresql_query:
+        db: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        query: "CREATE TABLE emails (id SERIAL PRIMARY KEY, username VARCHAR(50) NOT NULL, email VARCHAR(50) NOT NULL)" 
+
+    - name: Insert data into tel_numbers table
+      postgresql_query:
+        db: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        query: "INSERT INTO tel_numbers (username, tel_number) VALUES ('test', '+7 (123) 456 78 90'), ('Rayan Gosling', '+7 (111) 222 33 44')"
+
+    - name: Insert data into emails table
+      postgresql_query:
+        db: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"
+        query: "INSERT INTO emails (username, email) VALUES ('test', 'test@test.com'), ('Rayan Gosling', 'gosling@gov.ru')"
+
+
+- name: db_repl_install
+  hosts: db_repl
+  become: true
+  tasks:
+    - name: Add PostgreSQL apt repository key
+      apt_key:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+    - name: Add PostgreSQL apt repository
+      apt_repository:
+        repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"
+
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+
+    - name: Install PostgreSQL
+      apt:                   
+        name: 
+          - postgresql-16
+        state: present        # Устанавливаем состояние пакетов как present
+
+    - name: Install libs
+      apt:
+        name: 
+          - postgresql-contrib
+        state: latest         # Устанавливаем последние версии пакетов
+    
+
+- name: db_repl_config
+  hosts: db_repl
+  become: true
+  tasks:
+    - name: config postgresql.conf
+      become_user: postgres
+      lineinfile:
+        path: /etc/postgresql/16/main/postgresql.conf
+        regexp: '^#?{{ item.regexp }}'               # Регулярное выражение для поиска строки (с учетом возможного наличия комментария перед настройкой)
+        line: '{{ item.line }}'                      # Новая строка для замены
+      loop:
+        - { regexp: "listen_addresses =", line: "listen_addresses = '*'" }
+        - { regexp: "port =", line: "port = {{ hostvars[inventory_hostname]['DB_REPL_PORT'] }}" }
+
+    - name: Stop PSQL
+      shell: service postgresql stop
+    
+    - name: Clear /var/lib/postgresql/16/main/
+      become_user: postgres
+      shell: rm -rf /var/lib/postgresql/16/main/*
+
+    - name: Replication
+      become_user: postgres
+      shell:  pg_basebackup -v -P -R -h {{ hostvars[inventory_hostname]['DB_HOST'] }} -p {{ hostvars[inventory_hostname]['DB_REPL_PORT'] }} -U {{ hostvars[inventory_hostname]['DB_REPL_USER'] }} -D /var/lib/postgresql/16/main/
+      environment: 
+        PGPASSWORD: "{{ hostvars[inventory_hostname]['DB_REPL_PASSWORD'] }}"
+
+    - name: Start PSQL
+      shell: service postgresql start
+
+- name: start bot
+  hosts: db_bot
+  become: true
+  tasks:
+    - name: mkdir
+      command: mkdir -p "tg_bot"
+
+    - name: git clone
+      git:
+        repo: "{{ hostvars[inventory_hostname]['github'] }}"
+        dest: "tg_bot"
+        version: docker
+
+    - name: run python bot
+      shell: "nohup python3 tg_bot/bot/bot.py > /dev/null 2>&1 &"
+      environment:
+        TOKEN: "{{ hostvars[inventory_hostname]['TOKEN'] }}"
+        RM_HOST: "{{ hostvars[inventory_hostname]['RM_HOST'] }}"
+        RM_PORT: "{{ hostvars[inventory_hostname]['RM_PORT'] }}"
+        RM_USER: "{{ hostvars[inventory_hostname]['RM_USER'] }}"
+        RM_PASSWORD: "{{ hostvars[inventory_hostname]['RM_PASSWORD'] }}"
+        DB_USER: "{{ hostvars[inventory_hostname]['DB_USER'] }}"
+        DB_PASSWORD: "{{ hostvars[inventory_hostname]['DB_PASSWORD'] }}"
+        DB_HOST: "{{ hostvars[inventory_hostname]['DB_HOST'] }}"
+        DB_PORT: "{{ hostvars[inventory_hostname]['DB_PORT'] }}"
+        DB_DATABASE: "{{ hostvars[inventory_hostname]['DB_DATABASE'] }}"

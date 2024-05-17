@@ -1,0 +1,29 @@
+all:
+  hosts:
+    db_bot:
+      ansible_host: 192.168.195.148
+      ansible_user: ansible
+      ansible_password: ubuntu
+      github: https://github.com/Catangenss/DevOps-PT-START-2024.1
+      TOKEN: <Input token telegram bot>
+      RM_HOST: 192.168.195.147
+      RM_PORT: 22
+      RM_USER: ubuntu
+      RM_PASSWORD: ubuntu
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: Qq12345
+      DB_DATABASE: pt_intern
+      DB_REPL_USER: repl_user
+      DB_REPL_PASSWORD: Qq12345
+      DB_REPL_HOST: 192.168.195.144
+    db_repl:
+      ansible_host: 192.168.195.144
+      ansible_user: ansible
+      ansible_password: ubuntu
+      DB_HOST: 192.168.195.148
+      DB_REPL_USER: repl_user
+      DB_REPL_PASSWORD: Qq12345
+      DB_REPL_PORT: 5432
+      
