@@ -131,9 +131,14 @@ def confirmAddInDB_phone(update, context):
         return ConversationHandler.END
 
 def getContactName_phone(update, context):
-    phone_numbers = context.user_data.get('phone_numbers')
-    phone_number = phone_numbers.pop(0)
     contact_name = update.message.text
+    if len(contact_name) > 50:
+         update.message.reply_text(f"Введите имя контакта до 50 символов")
+         return 'get_contact_name_phone'
+    phone_numbers = context.user_data.get('phone_numbers')
+    if not phone_numbers:
+        return ConversationHandler.END
+    phone_number = phone_numbers.pop(0)
     context.user_data['contacts'][phone_number] = contact_name
     # Если есть еще номера телефонов, запрашиваем следующее имя контакта
     if phone_numbers:
@@ -143,7 +148,7 @@ def getContactName_phone(update, context):
         # Если больше нет номеров телефонов, вызываем функцию add_in_db
         add_in_db(update, context, context.user_data['contacts'], 'tel_numbers')
         return ConversationHandler.END
-
+    
 def add_in_db(update, context, data, table):
     try:
         connection = psycopg2.connect(user=username_db,
@@ -162,6 +167,7 @@ def add_in_db(update, context, data, table):
         logging.info("Команда успешно выполнена")
     except (Exception, Error) as error:
         logging.error("Ошибка при работе с PostgreSQL: %s", error)
+        update.message.reply_text(f'Произошла ошибка: {error}')
     finally:
         if connection is not None:
             cursor.close()
@@ -219,16 +225,21 @@ def confirmAddInDB_email(update, context):
         return ConversationHandler.END
 
 def getContactName_email(update, context):
-    email_list = context.user_data.get('emails')
-    email = email_list.pop(0)
     contact_name = update.message.text
+    if len(contact_name) > 50:
+         update.message.reply_text(f"Введите имя контакта до 50 символов")
+         return 'get_contact_name_email'
+    email_list = context.user_data.get('emails')
+    if not email_list:
+        return ConversationHandler.END
+    email = email_list.pop(0)
     context.user_data['contacts'][email] = contact_name
     # Если есть еще адреса, запрашиваем следующее имя контакта
     if email_list:
         update.message.reply_text(f"Введите имя контакта для адерса {email_list[0]}:")
         return 'get_contact_name_email'
     else:
-        # Если больше нет номеров телефонов, вызываем функцию add_in_db
+        # Если больше нет адресов, вызываем функцию add_in_db
         add_in_db(update, context, context.user_data['contacts'], 'emails')
         return ConversationHandler.END
 
