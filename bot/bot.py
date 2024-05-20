@@ -4,6 +4,7 @@ import paramiko
 import os
 import psycopg2
 import subprocess
+import time
 from psycopg2 import Error
 from dotenv import load_dotenv
 from telegram import Update, ForceReply
@@ -63,7 +64,6 @@ def findPhoneNumbersCommand(update: Update, context):
     update.message.reply_text('Введите текст для поиска телефонных номеров: ')
     return 'findPhoneNumbers'
 
-
 def findPhoneNumbers(update, context):
     user_input = update.message.text  # Получаем текст, содержащий(или нет) номера телефонов
 
@@ -93,10 +93,25 @@ def findPhoneNumbers(update, context):
         update.message.reply_text('Телефонные номера не найдены')
         return ConversationHandler.END
 
-    phoneNumbers = ''  # Создаем строку, в которую будем записывать номера телефонов
-    for i, phone_number in enumerate(sorted_phone_numbers):
-        phoneNumbers += f'{i + 1}. {phone_number}\n'  # Записываем очередной номер
-    context.user_data['phone_numbers'] = sorted_phone_numbers
+    unique_numbers = []
+    duplicates = []
+
+    for phone_number in sorted_phone_numbers:
+        if phone_number not in unique_numbers:
+            unique_numbers.append(phone_number)
+        elif phone_number not in duplicates:
+            duplicates.append(phone_number)
+
+    phoneNumbers = ''  # строка для записи номеров телефонов
+    for i, phone_number in enumerate(unique_numbers):
+        phoneNumbers += f'{i + 1}. {phone_number}\n'  # очередной номер
+    
+    if duplicates:
+        phoneNumbers += '\nОбнаружены дубликаты:\n'
+        for i, phone_number in enumerate(duplicates):
+            phoneNumbers += f'{i + 1}. {phone_number}\n'
+
+    context.user_data['phone_numbers'] = unique_numbers
     question_message = 'Хотите добавить номера телефонов в базу данных? (да/нет)'
     update.message.reply_text(f"{phoneNumbers}\n{question_message}")
 
@@ -167,13 +182,27 @@ def findEmails(update: Update, context):
         update.message.reply_text('Email адреса не найдены')
         return
 
-    emails = ''
-    for i in range(len(email_List)):
-        emails += f'{i + 1}. {email_List[i]}\n'  # Записываем очередной номер
+    unique_emails = []
+    duplicates = []
 
-    context.user_data['emails'] = email_List
+    for email in email_List:
+        if email not in unique_emails:
+            unique_emails.append(email)
+        elif email not in duplicates:
+            duplicates.append(email)
+
+    emails_out = ''
+    for i, email in enumerate(unique_emails):
+        emails_out += f'{i + 1}. {email}\n'  # Записываем очередную почту
+    
+    if duplicates:
+        emails_out += '\nОбнаружены дубликаты:\n'
+        for i, email in enumerate(duplicates):
+            emails_out += f'{i + 1}. {email}\n'
+
+    context.user_data['emails'] = unique_emails
     question_message = 'Хотите добавить адреса email в базу данных? (да/нет)'
-    update.message.reply_text(f"{emails}\n{question_message}")
+    update.message.reply_text(f"{emails_out}\n{question_message}")
     return 'confirm_to_add_email'
 
 def confirmAddInDB_email(update, context):
@@ -240,6 +269,7 @@ def command(update: Update, context, command):
         if len(current_chunk + package + "\n") > 4096:  # Проверяем, не превышает ли текущая часть максимальный размер сообщения
             update.message.reply_text(current_chunk)  # Отправляем текущий чанк
             current_chunk = ""  # Обнуляем текущий кусок для следующей порции
+            time.sleep(0.5)
         current_chunk += package + "\n"
 
     # Отправляем чанк, если он не пустой
@@ -262,10 +292,10 @@ def AptList_request(update: Update, context):
 def AptList_response(update: Update, context):
     user_input = update.message.text  # Получаем текст
     com = user_input.split()
-    if com[0] == "all" and len(com) == 1:
+    if com[0].lower() == "all" and len(com) == 1:
         command(update, context, "apt list --installed")
     elif len(com) == 1:
-        command(update, context, f"apt show {com[0]}")
+        command(update, context, f"apt show {com[0].lower()}")
     else:
         update.message.reply_text('Неверный ввод')
     return ConversationHandler.END
@@ -279,7 +309,7 @@ def Service_response(update: Update, context):
     user_input = update.message.text  # Получаем текст
     service = user_input.split()
     if len(service) == 1:
-        command(update, context, f"systemctl status {service[0]}")
+        command(update, context, f"systemctl status {service[0].lower()}")
     else:
         update.message.reply_text('Неверный ввод')
     return ConversationHandler.END
